@@ -149,10 +149,12 @@ class Element:
     context.
     """
 
-    def __init__(self, draw_method):
+    def __init__(self, draw_method, dimensions_method=None):
         """Initialize."""
         self.draw_method = draw_method
         self.matrix = 1.0 * np.eye(3)
+        # DS
+        self.dimensions_method = dimensions_method
 
     def _cairo_matrix(self):
         """Return the element's matrix in cairo form """
@@ -173,6 +175,15 @@ class Element:
         ctx = surface.get_new_context()
         self._transform_ctx(ctx)
         self.draw_method(ctx)
+
+    def dimensions(self, surface):
+        """Get the eventual dimensions of the element if it was draw on the surface"""
+        if self.dimensions_method is None:
+            raise RuntimeError("Dimensions not available for this element")
+
+        ctx = surface.get_new_context()
+        self._transform_ctx(ctx)
+        return self.dimensions_method(ctx)
 
     def set_matrix(self, new_mat):
         """Return a copy of the element, with a new transformation matrix """
@@ -485,9 +496,11 @@ def bezier_curve(points, **kw):
     points
       List of four (x,y) tuples specifying the points of the curve.
     '''
+
     def draw(ctx):
         ctx.move_to(*points[0])
         ctx.curve_to(*tuple(chain(*points))[2:])
+
     return shape_element(draw, **kw)
 
 
@@ -593,5 +606,12 @@ def text(txt, fontfamily, fontsize, fill=(0, 0, 0),
             ctx.set_line_width(stroke_width)
             ctx.stroke()
 
-    return (Element(draw).scale(1, 1 if (y_origin == "top") else -1)
+    def dimensions(ctx):
+        ctx.select_font_face(fontfamily, fontslant, fontweight)
+        ctx.set_font_size(fontsize)
+        xbear, ybear, w, h, xadvance, yadvance = ctx.text_extents(txt)
+
+        return w, h
+
+    return (Element(draw, dimensions).scale(1, 1 if (y_origin == "top") else -1)
             .rotate(angle))
